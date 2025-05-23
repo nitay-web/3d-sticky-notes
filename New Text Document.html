@@ -1,0 +1,955 @@
+[⚠️ Suspicious Content] <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Notes Space</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.21/dist/vanta.net.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .note {
+            transform-style: preserve-3d;
+            transition: all 0.5s ease;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        .note:hover {
+            transform: translateY(-10px) rotateY(10deg);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+        .note-front {
+            backface-visibility: hidden;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .note-back {
+            backface-visibility: hidden;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            transform: rotateY(180deg);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .flipped {
+            transform: rotateY(180deg);
+        }
+        #vanta-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        .note-enter {
+            animation: noteAppear 0.8s ease-out forwards;
+        }
+        @keyframes noteAppear {
+            0% {
+                opacity: 0;
+                transform: translateY(100px) rotateX(90deg) scale(0.5);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) rotateX(0) scale(1);
+            }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        /* Custom cursor styles */
+        .custom-cursor {
+            position: fixed;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: rgba(59, 130, 246, 0.5);
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: difference;
+            transition: transform 0.1s ease;
+        }
+        .cursor-inner {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: white;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .cursor-active {
+            transform: translate(-50%, -50%) scale(1.5);
+            background-color: rgba(239, 68, 68, 0.7);
+        }
+        .cursor-text {
+            transform: translate(-50%, -50%) scale(2);
+            background-color: rgba(139, 92, 246, 0.7);
+        }
+        /* Auth modal styles */
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        .auth-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        /* Delete all modal */
+        .delete-all-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        .delete-all-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        /* Vote styles */
+        .vote-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .vote-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .upvote-btn:hover {
+            color: #10B981;
+            transform: translateY(-2px);
+        }
+        .downvote-btn:hover {
+            color: #EF4444;
+            transform: translateY(2px);
+        }
+        .vote-count {
+            font-weight: bold;
+            min-width: 1.5rem;
+            text-align: center;
+        }
+        .positive-votes {
+            color: #10B981;
+        }
+        .negative-votes {
+            color: #EF4444;
+        }
+        .neutral-votes {
+            color: #6B7280;
+        }
+        .voted {
+            color: #3B82F6;
+        }
+        /* Image styles */
+        .note-image {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            margin: 0.5rem 0;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .image-preview {
+            position: relative;
+            width: 80px;
+            height: 60px;
+            border-radius: 0.25rem;
+            overflow: hidden;
+        }
+        .image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .remove-image-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 0 0 0 0.25rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-upload-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            background-color: #3B82F6;
+            color: white;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .image-upload-btn:hover {
+            background-color: #2563EB;
+        }
+        .image-upload-btn i {
+            margin-right: 0.5rem;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden cursor-none">
+    <!-- Custom cursor elements -->
+    <div class="custom-cursor">
+        <div class="cursor-inner"></div>
+    </div>
+    
+    <!-- Auth modal -->
+    <div id="auth-modal" class="auth-modal">
+        <div class="auth-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800" id="auth-modal-title">Login</h2>
+                <button id="close-auth-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="auth-form">
+                <div class="mb-4">
+                    <label for="auth-username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" id="auth-username", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your username">
+                </div>
+                <div class="mb-4">
+                    <label for="auth-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="auth-password", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your password">
+                </div>
+                <div class="mb-4 hidden" id="auth-confirm-password-container">
+                    <label for="auth-confirm-password" class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <input type="password" id="auth-confirm-password", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Confirm your password">
+                </div>
+                <button id="auth-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105 mb-4">
+                    Submit
+                </button>
+                <div class="text-center">
+                    <button id="toggle-auth-mode" class="text-blue-600 hover:text-blue-800 text-sm">Switch to Register</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete all notes modal -->
+    <div id="delete-all-modal" class="delete-all-modal">
+        <div class="delete-all-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Delete All Notes</h2>
+                <button id="close-delete-all-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div>
+                <div class="mb-4">
+                    <label for="delete-all-password" class="block text-sm font-medium text-gray-700 mb-1">Enter Password</label>
+                    <input type="password" id="delete-all-password", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter password to delete all notes">
+                </div>
+                <button id="confirm-delete-all" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105">
+                    <i class="fas fa-trash mr-2"></i> Delete All Notes
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="vanta-bg"></div>
+    
+    <div class="container mx-auto px-4 py-8 relative z-10">
+        <header class="text-center mb-12">
+            <div class="flex justify-between items-center mb-4">
+                <div></div> <!-- Empty div for balance -->
+                <div class="flex space-x-4">
+                    <button id="login-btn" class="bg-white bg-opacity-80 hover:bg-opacity-100 text-blue-600 font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105 backdrop-blur-sm">
+                        <i class="fas fa-sign-in-alt mr-2"></i> Login
+                    </button>
+                    <button id="logout-btn" class="hidden bg-white bg-opacity-80 hover:bg-opacity-100 text-red-600 font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105 backdrop-blur-sm">
+                        <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                    </button>
+                    <button id="delete-all-btn" class="hidden bg-white bg-opacity-80 hover:bg-opacity-100 text-red-600 font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105 backdrop-blur-sm">
+                        <i class="fas fa-trash mr-2"></i> Delete All
+                    </button>
+                </div>
+            </div>
+            <h1 class="text-5xl font-bold text-white mb-4 drop-shadow-lg">3D Notes Space</h1>
+            <p class="text-xl text-white opacity-90 max-w-2xl mx-auto">Create, organize and visualize your notes in a beautiful 3D environment</p>
+        </header>
+
+        <div class="max-w-2xl mx-auto bg-white bg-opacity-90 rounded-xl shadow-2xl p-6 mb-12 backdrop-blur-sm">
+            <div class="flex flex-col space-y-4">
+                <div>
+                    <label for="note-title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                    <input type="text" id="note-title", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Note title...">
+                </div>
+                <div>
+                    <label for="note-content" class="block text-sm font-medium text-gray-700 mb-1">Content</label>
+                    <textarea id="note-content" rows="4" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Write your note here..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Images</label>
+                    <div class="image-preview-container" id="image-preview-container"></div>
+                    <label for="image-upload" class="image-upload-btn">
+                        <i class="fas fa-image"></i> Add Image
+                    </label>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden" multiple>
+                    <p class="text-xs text-gray-500 mt-1">Max size: 1280x720px</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="w-1/2">
+                        <label for="note-color" class="block text-sm font-medium text-gray-700 mb-1">Color</label>
+                        <select id="note-color", class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="bg-yellow-200">Yellow</option>
+                            <option value="bg-blue-200">Blue</option>
+                            <option value="bg-green-200">Green</option>
+                            <option value="bg-pink-200">Pink</option>
+                            <option value="bg-purple-200">Purple</option>
+                        </select>
+                    </div>
+                    <button id="add-note" class="w-1/2 mt-6 bg-blue-600 hover:bg-blue-7 00 text-white font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105">
+                        <i class="fas fa-plus mr-2"></i> Add Note
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-8 flex justify-center">
+            <div class="bg-white bg-opacity-80 rounded-full px-6 py-2 shadow-lg backdrop-blur-sm">
+                <span class="text-gray-700 font-medium">Total Notes: <span id="note-count" class="text-blue-600">0</span></span>
+            </div>
+        </div>
+
+        <div id="notes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            <!-- Notes will be added here dynamically -->
+        </div>
+
+        <div id="empty-state" class="text-center py-16">
+            <div class="inline-block p-6 bg-white bg-opacity-80 rounded-full mb-6 backdrop-blur-sm">
+                <i class="fas fa-sticky-note text-4xl text-gray-400"></i>
+            </div>
+            <h3 class="text-2xl font-medium text-white mb-2">No notes yet</h3>
+            <p class="text-white opacity-80 max-w-md mx-auto">Add your first note by filling out the form above</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Vanta.js background
+            VANTA.NET({
+                el: "#vanta-bg",
+                mouseControls: true,
+                touchControls: true,
+                gyroControls: false,
+                minHeight: 200.00,
+                minWidth: 200.00,
+                scale: 1.00,
+                scaleMobile: 1.00,
+                color: 0x3a86ff,
+                backgroundColor: 0x0,
+                points: 12.00,
+                maxDistance: 22.00,
+                spacing: 16.00
+            });
+
+            // Custom cursor functionality
+            const cursor = document.querySelector('.custom-cursor');
+            document.addEventListener('mousemove', (e) => {
+                cursor.style.left = e.clientX + 'px';
+                cursor.style.top = e.clientY + 'px';
+            });
+
+            // Add cursor effects for interactive elements
+            const interactiveElements = document.querySelectorAll('button, a, input, textarea, select, .note');
+            interactiveElements.forEach(el => {
+                el.addEventListener('mouseenter', () => {
+                    cursor.classList.add('cursor-active');
+                });
+                el.addEventListener('mouseleave', () => {
+                    cursor.classList.remove('cursor-active');
+                });
+            });
+
+            // Text elements get a different cursor effect
+            const textElements = document.querySelectorAll('input[type="text"], textarea');
+            textElements.forEach(el => {
+                el.addEventListener('mouseenter', () => {
+                    cursor.classList.add('cursor-text');
+                });
+                el.addEventListener('mouseleave', () => {
+                    cursor.classList.remove('cursor-text');
+                });
+            });
+
+            // Auth state management
+            let currentUser = JSON.parse(localStorage.getItem('notes-current-user')) || null;
+            let isLoginMode = true;
+            updateAuthUI();
+
+            // Notes array to store all notes
+            let notes = JSON.parse(localStorage.getItem('3d-notes')) || [];
+            updateNoteCount();
+            renderNotes();
+
+            // Image handling
+            let selectedImages = [];
+            const imageUpload = document.getElementById('image-upload');
+            const imagePreviewContainer = document.getElementById('image-preview-container');
+
+            imageUpload.addEventListener('change', function(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    Array.from(files).forEach(file => {
+                        if (!file.type.match('image.*')) {
+                            alert('Only image files are allowed');
+                            return;
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const img = new Image();
+                            img.onload = function() {
+                                // Check image dimensions
+                                if (img.width > 1280 || img.height > 720) {
+                                    alert('Image dimensions must be 1280x720 or smaller');
+                                    return;
+                                }
+
+                                // Add to selected images
+                                selectedImages.push(e.target.result);
+                                updateImagePreviews();
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            });
+
+            function updateImagePreviews() {
+                imagePreviewContainer.innerHTML = '';
+                selectedImages.forEach((image, index) => {
+                    const previewDiv = document.createElement('div');
+                    previewDiv.className = 'image-preview';
+                    
+                    const img = document.createElement('img');
+                    img.src = image;
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'remove-image-btn';
+                    removeBtn.innerHTML = '<i class="fas fa-times text-xs"></i>';
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        selectedImages.splice(index, 1);
+                        updateImagePreviews();
+                    });
+                    
+                    previewDiv.appendChild(img);
+                    previewDiv.appendChild(removeBtn);
+                    imagePreviewContainer.appendChild(previewDiv);
+                });
+            }
+
+            // Add note button click handler
+            document.getElementById('add-note').addEventListener('click', addNote);
+
+            // Auth modal controls
+            document.getElementById('login-btn').addEventListener('click', () => {
+                document.getElementById('auth-modal').style.display = 'flex';
+                document.getElementById('auth-modal-title').textContent = 'Login';
+                isLoginMode = true;
+                document.getElementById('auth-confirm-password-container').classList.add('hidden');
+                document.getElementById('auth-submit').textContent = 'Login';
+                document.getElementById('toggle-auth-mode').textContent = 'Switch to Register';
+            });
+
+            document.getElementById('logout-btn').addEventListener('click', logout);
+
+            document.getElementById('close-auth-modal').addEventListener('click', () => {
+                document.getElementById('auth-modal').style.display = 'none';
+            });
+
+            document.getElementById('toggle-auth-mode').addEventListener('click', () => {
+                isLoginMode = !isLoginMode;
+                if (isLoginMode) {
+                    document.getElementById('auth-modal-title').textContent = 'Login';
+                    document.getElementById('auth-confirm-password-container').classList.add('hidden');
+                    document.getElementById('auth-submit').textContent = 'Login';
+                } else {
+                    document.getElementById('auth-modal-title').textContent = 'Register';
+                    document.getElementById('auth-confirm-password-container').classList.remove('hidden');
+                    document.getElementById('auth-submit').textContent = 'Register';
+                }
+                document.getElementById('toggle-auth-mode').textContent = isLoginMode ? 'Switch to Register' : 'Switch to Login';
+            });
+
+            document.getElementById('auth-submit').addEventListener('click', handleAuthSubmit);
+
+            // Delete all notes functionality
+            document.getElementById('delete-all-btn').addEventListener('click', () => {
+                document.getElementById('delete-all-modal').style.display = 'flex';
+            });
+
+            document.getElementById('close-delete-all-modal').addEventListener('click', () => {
+                document.getElementById('delete-all-modal').style.display = 'none';
+                document.getElementById('delete-all-password').value = '';
+            });
+
+            document.getElementById('confirm-delete-all').addEventListener('click', () => {
+                const password = document.getElementById('delete-all-password').value.trim();
+                if (password === '1231321') {
+                    notes = [];
+                    saveNotes();
+                    renderNotes();
+                    document.getElementById('delete-all-modal').style.display = 'none';
+                    document.getElementById('delete-all-password').value = '';
+                    alert('All notes have been deleted.');
+                } else {
+                    alert('Incorrect password. Please try again.');
+                }
+            });
+
+            // Function to handle authentication
+            function handleAuthSubmit() {
+                const username = document.getElementById('auth-username').value.trim();
+                const password = document.getElementById('auth-password').value.trim();
+                
+                if (!username || !password) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+                
+                if (isLoginMode) {
+                    // Simple login - in a real app, you'd verify against a database
+                    const users = JSON.parse(localStorage.getItem('notes-users')) || [];
+                    const user = users.find(u => u.username === username && u.password === password);
+                    
+                    if (user) {
+                        currentUser = { username: user.username };
+                        localStorage.setItem('notes-current-user', JSON.stringify(currentUser));
+                        updateAuthUI();
+                        document.getElementById('auth-modal').style.display = 'none';
+                        clearAuthForm();
+                        renderNotes(); // Re-render notes to show username
+                    } else {
+                        alert('Invalid username or password');
+                    }
+                } else {
+                    // Registration
+                    const confirmPassword = document.getElementById('auth-confirm-password').value.trim();
+                    
+                    if (password !== confirmPassword) {
+                        alert('Passwords do not match');
+                        return;
+                    }
+                    
+                    let users = JSON.parse(localStorage.getItem('notes-users')) || [];
+                    
+                    // Check if username already exists
+                    if (users.some(u => u.username === username)) {
+                        alert('Username already exists');
+                        return;
+                    }
+                    
+                    // Add new user (in a real app, you'd hash the password)
+                    users.push({ username, password });
+                    localStorage.setItem('notes-users', JSON.stringify(users));
+                    
+                    // Log the user in
+                    currentUser = { username };
+                    localStorage.setItem('notes-current-user', JSON.stringify(currentUser));
+                    updateAuthUI();
+                    document.getElementById('auth-modal').style.display = 'none';
+                    clearAuthForm();
+                    renderNotes(); // Re-render notes to show username
+                    
+                    alert('Registration successful! You are now logged in.');
+                }
+            }
+
+            // Function to logout
+            function logout() {
+                currentUser = null;
+                localStorage.removeItem('notes-current-user');
+                updateAuthUI();
+                renderNotes(); // Re-render notes to show "Anonymous"
+            }
+
+            // Function to update auth UI based on current state
+            function updateAuthUI() {
+                if (currentUser) {
+                    document.getElementById('login-btn').classList.add('hidden');
+                    document.getElementById('logout-btn').classList.remove('hidden');
+                    document.getElementById('delete-all-btn').classList.remove('hidden');
+                } else {
+                    document.getElementById('login-btn').classList.remove('hidden');
+                    document.getElementById('logout-btn').classList.add('hidden');
+                    document.getElementById('delete-all-btn').classList.add('hidden');
+                }
+            }
+
+            // Function to clear auth form
+            function clearAuthForm() {
+                document.getElementById('auth-username').value = '';
+                document.getElementById('auth-password').value = '';
+                document.getElementById('auth-confirm-password').value = '';
+            }
+
+            // Function to add a new note
+            function addNote() {
+                if (!currentUser) {
+                    alert('Please login to add notes');
+                    document.getElementById('auth-modal').style.display = 'flex';
+                    return;
+                }
+
+                const title = document.getElementById('note-title').value.trim();
+                const content = document.getElementById('note-content').value.trim();
+                const color = document.getElementById('note-color').value;
+
+                if (!title || !content) {
+                    alert('Please fill in both title and content');
+                    return;
+                }
+
+                const newNote = {
+                    id: Date.now(),
+                    title,
+                    content,
+                    color,
+                    createdAt: new Date().toISOString(),
+                    author: currentUser.username,
+                    votes: 0,
+                    votedBy: [], // Array to track who voted on this note
+                    images: [...selectedImages] // Store the base64 encoded images
+                };
+
+                notes.unshift(newNote);
+                saveNotes();
+                renderNotes();
+                clearForm();
+                selectedImages = [];
+                updateImagePreviews();
+            }
+
+            // Function to render all notes (sorted by votes)
+            function renderNotes() {
+                const notesContainer = document.getElementById('notes-container');
+                const emptyState = document.getElementById('empty-state');
+
+                if (notes.length === 0) {
+                    emptyState.style.display = 'block';
+                    notesContainer.style.display = 'none';
+                    return;
+                }
+
+                emptyState.style.display = 'none';
+                notesContainer.style.display = 'grid';
+                notesContainer.innerHTML = '';
+
+                // Sort notes by votes (descending) and then by creation time (newest first)
+                const sortedNotes = [...notes].sort((a, b) => {
+                    if (b.votes !== a.votes) {
+                        return b.votes - a.votes;
+                    }
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                });
+
+                sortedNotes.forEach(note => {
+                    const noteElement = createNoteElement(note);
+                    notesContainer.appendChild(noteElement);
+                    
+                    // Add animation class and remove it after animation completes
+                    setTimeout(() => {
+                        noteElement.classList.add('note-enter');
+                    }, 50);
+                });
+            }
+
+            // Function to create a note element
+            function createNoteElement(note) {
+                const noteElement = document.createElement('div');
+                noteElement.className = `note relative h-64 rounded-xl overflow-hidden ${note.color} cursor-pointer`;
+                noteElement.dataset.id = note.id;
+
+                // Front side of the note
+                const front = document.createElement('div');
+                front.className = 'note-front p-5';
+                
+                const title = document.createElement('h3');
+                title.className = 'text-xl font-bold mb-3 text-gray-800 truncate';
+                title.textContent = note.title;
+                
+                const content = document.createElement('div');
+                content.className = 'text-gray-700 flex-grow overflow-y-auto';
+                
+                // Add content text
+                const contentText = document.createElement('p');
+                contentText.textContent = note.content;
+                content.appendChild(contentText);
+                
+                // Add images if they exist
+                if (note.images && note.images.length > 0) {
+                    note.images.forEach(imageData => {
+                        const img = document.createElement('img');
+                        img.src = imageData;
+                        img.className = 'note-image';
+                        content.appendChild(img);
+                    });
+                }
+                
+                // Vote container
+                const voteContainer = document.createElement('div');
+                voteContainer.className = 'vote-container';
+                
+                const upvoteBtn = document.createElement('button');
+                upvoteBtn.className = 'vote-btn upvote-btn';
+                upvoteBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+                
+                // Check if current user has voted on this note
+                const hasVoted = currentUser && note.votedBy.includes(currentUser.username);
+                if (hasVoted) {
+                    upvoteBtn.classList.add('voted');
+                }
+                
+                upvoteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleVote(note.id, 1);
+                });
+                
+                const voteCount = document.createElement('span');
+                voteCount.className = `vote-count ${note.votes > 0 ? 'positive-votes' : note.votes < 0 ? 'negative-votes' : 'neutral-votes'}`;
+                voteCount.textContent = note.votes;
+                
+                const downvoteBtn = document.createElement('button');
+                downvoteBtn.className = 'vote-btn downvote-btn';
+                downvoteBtn.innerHTML = '<i class="fas fa-arrow-down"></i>';
+                
+                if (hasVoted) {
+                    downvoteBtn.classList.add('voted');
+                }
+                
+                downvoteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleVote(note.id, -1);
+                });
+                
+                voteContainer.appendChild(upvoteBtn);
+                voteContainer.appendChild(voteCount);
+                voteContainer.appendChild(downvoteBtn);
+                
+                const meta = document.createElement('div');
+                meta.className = 'text-xs text-gray-500 mt-2 flex justify-between';
+                
+                const date = document.createElement('span');
+                date.textContent = new Date(note.createdAt).toLocaleString();
+                
+                const author = document.createElement('span');
+                author.className = 'font-medium';
+                author.textContent = note.author || 'Anonymous';
+                
+                meta.appendChild(date);
+                meta.appendChild(author);
+                
+                const flipIcon = document.createElement('div');
+                flipIcon.className = 'absolute bottom-3 right-3 text-gray-600 hover:text-gray-800';
+                flipIcon.innerHTML = '<i class="fas fa-sync-alt"></i>';
+                flipIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    noteElement.classList.toggle('flipped');
+                });
+                
+                front.appendChild(title);
+                front.appendChild(content);
+                front.appendChild(voteContainer);
+                front.appendChild(meta);
+                front.appendChild(flipIcon);
+
+                // Back side of the note
+                const back = document.createElement('div');
+                back.className = 'note-back p-5';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'mt-4 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition duration-300 transform hover:scale-105';
+                deleteBtn.innerHTML = '<i class="fas fa-trash mr-2"></i> Delete Note';
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteNote(note.id);
+                });
+                
+                const backContent = document.createElement('div');
+                backContent.className = 'text-gray-700 mb-4 overflow-y-auto';
+                
+                // Add content text
+                const backContentText = document.createElement('p');
+                backContentText.textContent = note.content;
+                backContent.appendChild(backContentText);
+                
+                // Add images if they exist
+                if (note.images && note.images.length > 0) {
+                    note.images.forEach(imageData => {
+                        const img = document.createElement('img');
+                        img.src = imageData;
+                        img.className = 'note-image';
+                        backContent.appendChild(img);
+                    });
+                }
+                
+                const backMeta = document.createElement('div');
+                backMeta.className = 'text-xs text-gray-500 mb-4';
+                
+                const backDate = document.createElement('div');
+                backDate.textContent = 'Created: ' + new Date(note.createdAt).toLocaleString();
+                
+                const backAuthor = document.createElement('div');
+                backAuthor.className = 'font-medium';
+                backAuthor.textContent = 'Author: ' + (note.author || 'Anonymous');
+                
+                const backVotes = document.createElement('div');
+                backVotes.className = `font-medium ${note.votes > 0 ? 'text-green-500' : note.votes < 0 ? 'text-red-500' : 'text-gray-500'}`;
+                backVotes.textContent = 'Votes: ' + note.votes;
+                
+                backMeta.appendChild(backDate);
+                backMeta.appendChild(backAuthor);
+                backMeta.appendChild(backVotes);
+                
+                const flipBackIcon = document.createElement('div');
+                flipBackIcon.className = 'absolute bottom-3 right-3 text-gray-600 hover:text-gray-800';
+                flipBackIcon.innerHTML = '<i class="fas fa-sync-alt"></i>';
+                flipBackIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    noteElement.classList.toggle('flipped');
+                });
+                
+                back.appendChild(backContent);
+                back.appendChild(backMeta);
+                back.appendChild(deleteBtn);
+                back.appendChild(flipBackIcon);
+
+                noteElement.appendChild(front);
+                noteElement.appendChild(back);
+
+                // Add hover effect
+                noteElement.addEventListener('mouseenter', () => {
+                    noteElement.classList.add('pulse');
+                });
+                
+                noteElement.addEventListener('mouseleave', () => {
+                    noteElement.classList.remove('pulse');
+                });
+
+                return noteElement;
+            }
+
+            // Function to handle voting
+            function handleVote(noteId, voteValue) {
+                if (!currentUser) {
+                    alert('Please login to vote');
+                    document.getElementById('auth-modal').style.display = 'flex';
+                    return;
+                }
+
+                const noteIndex = notes.findIndex(n => n.id === noteId);
+                if (noteIndex === -1) return;
+
+                const note = notes[noteIndex];
+                const userIndex = note.votedBy.indexOf(currentUser.username);
+
+                if (userIndex === -1) {
+                    // User hasn't voted yet - allow the vote
+                    note.votedBy.push(currentUser.username);
+                    note.votes += voteValue;
+                } else {
+                    // User has already voted - don't allow another vote
+                    alert('You can only vote once per note');
+                    return;
+                }
+
+                saveNotes();
+                renderNotes();
+            }
+
+            // Function to delete a note
+            function deleteNote(id) {
+                if (confirm('Are you sure you want to delete this note?')) {
+                    notes = notes.filter(note => note.id !== id);
+                    saveNotes();
+                    renderNotes();
+                }
+            }
+
+            // Function to save notes to localStorage
+            function saveNotes() {
+                localStorage.setItem('3d-notes', JSON.stringify(notes));
+                updateNoteCount();
+            }
+
+            // Function to update the note count display
+            function updateNoteCount() {
+                document.getElementById('note-count').textContent = notes.length;
+            }
+
+            // Function to clear the form
+            function clearForm() {
+                document.getElementById('note-title').value = '';
+                document.getElementById('note-content').value = '';
+                document.getElementById('note-title').focus();
+            }
+        });
+    </script>
+</body>
+</html>
